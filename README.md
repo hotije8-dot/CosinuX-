@@ -1,2 +1,2 @@
-# Utilyx
-UTILYX – Your Digital World, Simplified.
+# CosinuX 
+CosinuX – Your Digital World, Simplified.
