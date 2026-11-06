@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#4f46e5">
+<meta name="description" content="COSINUX — outils numériques gratuits, rapides et privés.">
+<meta name="color-scheme" content="light dark">
+<title>COSINUX – Your Digital World, Simplified.</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#161a2b;--mu:#667;--ac:#4f46e5;--bd:#dfe2ee}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1220;--card:#181c30;--tx:#eef0fa;--mu:#9aa3c0;--ac:#818cf8;--bd:#2a3050}}
+*{box-sizing:border-box}body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
+h1{margin:0;font-size:22px;letter-spacing:1px;color:var(--ac)}
+.tag{padding:0 16px;color:var(--mu);font-size:14px}
+button,select,input,textarea{font:inherit;color:var(--tx)}
+button{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 14px}
+button.s{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+main{padding:12px 16px 40px;max-width:900px;margin:auto}
+#q{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 0}.chips button{white-space:nowrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;text-align:left;color:var(--tx)}
+.c small{display:block;color:var(--mu);margin-top:4px}
+.c.on{border-color:var(--ac);outline:2px solid var(--ac)}
+#panel{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+#panel h2{margin:0 0 4px;font-size:18px}
+textarea{width:100%;min-height:130px;margin:8px 0;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+.o{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:6px 0}
+.o input[type=number],.o select{padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+img{max-width:100%;border-radius:8px;margin:8px 0}
+footer{text-align:center;color:var(--mu);font-size:13px;padding:20px}
+</style></head><body>
+<header><h1>COSINUX</h1><button class="s" id="lg">EN</button></header>
+<div class="tag" id="tag"></div>
+<main>
+<input id="q" type="search" aria-label="Rechercher un outil">
+<div class="chips" id="chips"></div>
+<div class="grid" id="grid"></div>
+<section id="panel" hidden aria-live="polite"></section>
+</main>
+<footer id="ft"></footer>
+<script>
+const $=s=>document.querySelector(s);
+let lang='fr';try{lang=localStorage.getItem('ux')||((navigator.language||'fr').slice(0,2)==='en'?'en':'fr')}catch(e){}
+const UI={fr:{ph:'Rechercher un outil…',all:'Tous',run:'Exécuter',copy:'Copier',dl:'Télécharger',in:'Entrée',out:'Résultat',copied:'Copié ✓',none:'Aucun outil trouvé',ft:'Traitement 100 % local : vos données ne quittent pas votre appareil.',file:'Choisir une image',fmt:'Format'},
+en:{ph:'Search a tool…',all:'All',run:'Run',copy:'Copy',dl:'Download',in:'Input',out:'Result',copied:'Copied ✓',none:'No tool found',ft:'100% local processing: your data never leaves your device.',file:'Choose an image',fmt:'Format'}};
+const M={convert:{fr:'Convertir',en:'Convert'},extract:{fr:'Extraire',en:'Extract'},clean:{fr:'Nettoyer',en:'Clean'},generate:{fr:'Générer',en:'Generate'}};
+const uniq=re=>t=>[...new Set(t.match(re)||[])].join('\n');
+const csvParse=input=>{
+ const t=input.replace(/^\uFEFF/,'');const rows=[];let row=[],field='',quoted=false,closed=false;
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(quoted){if(c==='\"'){if(t[i+1]==='\"'){field+='\"';i++}else{quoted=false;closed=true}}else field+=c;continue}
+  if(c===',' ){row.push(field);field='';closed=false;continue}
+  if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(field);if(row.some(v=>v!==''))rows.push(row);row=[];field='';closed=false;continue}
+  if(c==='\"'&&field===''&&!closed){quoted=true;continue}
+  if(closed&&c!==' '&&c!=='\t')throw new Error('CSV invalide : caractère inattendu après un champ entre guillemets.');
+  field+=c;
+ }
+ if(quoted)throw new Error('CSV invalide : guillemet fermant manquant.');
+ if(field!==''||row.length){row.push(field);if(row.some(v=>v!==''))rows.push(row)}
+ return rows;
+};
+const u8=s=>{const bytes=new TextEncoder().encode(s);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)};
+const secureRandomInt=max=>{if(!Number.isSafeInteger(max)||max<1)throw new Error('Paramètre aléatoire invalide.');const range=0x100000000,limit=range-(range%max),a=new Uint32Array(1);do{crypto.getRandomValues(a)}while(a[0]>=limit);return a[0]%max};
+const T=[
+{id:'json2csv',m:'convert',fr:['JSON → CSV','Tableau JSON vers CSV'],en:['JSON → CSV','JSON array to CSV'],ext:'csv',run:t=>{let a=JSON.parse(t);if(!Array.isArray(a))a=[a];const h=[...new Set(a.flatMap(Object.keys))];const e=v=>{v=v==null?'':typeof v=='object'?JSON.stringify(v):String(v);return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};return[h.join(','),...a.map(o=>h.map(k=>e(o[k])).join(','))].join('\n')}},
+{id:'csv2json',m:'convert',fr:['CSV → JSON','CSV vers tableau JSON'],en:['CSV → JSON','CSV to JSON array'],ext:'json',run:t=>{const r=csvParse(t),h=r.shift()||[];return JSON.stringify(r.map(x=>Object.fromEntries(h.map((k,i)=>[k,x[i]??'']))),null,2)}},
+{id:'b64',m:'convert',fr:['Base64','Encoder / décoder'],en:['Base64','Encode / decode'],opts:[{k:'mode',t:'sel',c:[['enc','Encode'],['dec','Decode']]}],run:(t,o)=>o.mode=='enc'?u8(t):new TextDecoder().decode(Uint8Array.from(atob(t.trim()),c=>c.charCodeAt(0)))},
+{id:'img',m:'convert',fr:['Image','PNG / JPG / WebP'],en:['Image','PNG / JPG / WebP'],file:1,opts:[{k:'f',t:'sel',c:[['image/png','PNG'],['image/jpeg','JPG'],['image/webp','WebP']]}]},
+{id:'mail',m:'extract',fr:['E-mails','Extraire les adresses'],en:['Emails','Extract addresses'],run:uniq(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g)},
+{id:'url',m:'extract',fr:['Liens','Extraire les URL'],en:['Links','Extract URLs'],run:uniq(/https?:\/\/[^\s<>"')]+/g)},
+{id:'tel',m:'extract',fr:['Téléphones','Extraire les numéros'],en:['Phones','Extract numbers'],run:t=>[...new Set((t.match(/\+?\d[\d\s().-]{7,}\d/g)||[]).map(x=>x.trim()))].join('\n')},
+{id:'dup',m:'clean',fr:['Doublons','Supprimer les lignes en double'],en:['Duplicates','Remove duplicate lines'],opts:[{k:'sort',t:'chk',l:['Trier A→Z','Sort A→Z']}],run:(t,o)=>{let a=[...new Set(t.split('\n').map(x=>x.trim()).filter(Boolean))];if(o.sort)a.sort((x,y)=>x.localeCompare(y));return a.join('\n')}},
+{id:'txt',m:'clean',fr:['Texte','Espaces, accents, lignes vides'],en:['Text','Spaces, accents, blank lines'],opts:[{k:'acc',t:'chk',l:['Retirer les accents','Remove accents']}],run:(t,o)=>{t=t.split('\n').map(x=>x.replace(/[ \t]+/g,' ').trim()).join('\n').replace(/\n{3,}/g,'\n\n').trim();return o.acc?t.normalize('NFD').replace(/[\u0300-\u036f]/g,''):t}},
+{id:'uuid',m:'generate',fr:['UUID','Identifiants uniques'],en:['UUID','Unique identifiers'],noin:1,opts:[{k:'n',t:'num',d:5,l:['Quantité','Count']}],run:(t,o)=>Array.from({length:Math.min(500,Math.max(1,o.n|0))},()=>crypto.randomUUID()).join('\n')},
+{id:'pwd',m:'generate',fr:['Mot de passe','Sécurisé, aléatoire'],en:['Password','Secure, random'],noin:1,opts:[{k:'n',t:'num',d:16,l:['Longueur','Length']},{k:'sym',t:'chk',d:1,l:['Symboles','Symbols']}],run:(t,o)=>{const lower='abcdefghijkmnopqrstuvwxyz',upper='ABCDEFGHJKLMNPQRSTUVWXYZ',digits='23456789',symbols='!@#$%^&*-_?';const groups=[lower,upper,digits,...(o.sym?[symbols]:[])];const n=Math.min(128,Math.max(6,Number(o.n)||16));if(n<groups.length)throw new Error('La longueur doit permettre d’inclure chaque catégorie de caractères.');const all=groups.join('');const pick=s=>s[secureRandomInt(s.length)];const chars=groups.map(pick);while(chars.length<n)chars.push(pick(all));for(let i=chars.length-1;i>0;i--){const j=secureRandomInt(i+1);[chars[i],chars[j]]=[chars[j],chars[i]]}return chars.join('')}},
+{id:'sha',m:'generate',fr:['Hash SHA-256','Empreinte de texte'],en:['SHA-256 hash','Text fingerprint'],run:async t=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('')}
+];
+let mod='all',cur=null,url=null;
+const tr=t=>t[lang==='en'?'en':'fr'];
+function draw(){const u=UI[lang];$('#q').placeholder=u.ph;$('#ft').textContent=u.ft;$('#lg').textContent=lang==='fr'?'EN':'FR';document.documentElement.lang=lang;
+$('#tag').textContent=lang==='fr'?'Convertir. Extraire. Nettoyer. Générer.':'Convert. Extract. Clean. Generate.';
+$('#chips').innerHTML='';[['all',u.all],...Object.keys(M).map(k=>[k,M[k][lang]])].forEach(([k,n])=>{const b=document.createElement('button');b.textContent=n;if(k!==mod)b.className='s';b.onclick=()=>{mod=k;draw()};$('#chips').append(b)});
+const q=$('#q').value.toLowerCase();const l=T.filter(t=>(mod=='all'||t.m==mod)&&(tr(t).join(' ')+t.id).toLowerCase().includes(q));
+$('#grid').innerHTML=l.length?'':`<p>${u.none}</p>`;l.forEach(t=>{const b=document.createElement('button');b.className='c'+(cur===t?' on':'');b.innerHTML=`<b>${tr(t)[0]}</b><small>${tr(t)[1]}</small>`;b.onclick=()=>{cur=t;draw();$('#panel').scrollIntoView({behavior:'smooth'})};$('#grid').append(b)});panel()}
+function panel(){const p=$('#panel');if(!cur){p.hidden=true;return}const u=UI[lang],t=cur;p.hidden=false;
+const o=(t.opts||[]).map(x=>x.t=='sel'?`<label>${u.fmt||''} <select id="o_${x.k}">${x.c.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></label>`:x.t=='num'?`<label>${x.l[lang=='en'?1:0]} <input type="number" id="o_${x.k}" value="${x.d}" style="width:80px"></label>`:`<label><input type="checkbox" id="o_${x.k}" ${x.d?'checked':''}> ${x.l[lang=='en'?1:0]}</label>`).join('');
+p.innerHTML=`<h2>${tr(t)[0]}</h2><div style="color:var(--mu)">${tr(t)[1]}</div>`+(t.file?`<p><input type="file" id="in" accept="image/*"></p>`:t.noin?'':`<textarea id="in" placeholder="${u.in}"></textarea>`)+`<div class="o">${o}</div><div class="row"><button id="go">${u.run}</button></div><div id="res"></div>`;
+$('#go').onclick=go}
+function opts(){const r={};(cur.opts||[]).forEach(x=>{const e=$('#o_'+x.k);r[x.k]=x.t=='chk'?e.checked:e.value});return r}
+async function go(){const u=UI[lang],t=cur,r=$('#res');r.innerHTML='';try{const o=opts();
+if(t.file){const f=$('#in').files[0];if(!f)throw new Error('Choisis une image avant de lancer la conversion.');if(!f.type.startsWith('image/'))throw new Error('Le fichier sélectionné n’est pas une image.');const bmp=await createImageBitmap(f);const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;const x=c.getContext('2d');if(!x)throw new Error('Canvas indisponible sur cet appareil.');if(o.f=='image/jpeg'){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}x.drawImage(bmp,0,0);bmp.close?.();
+const b=await new Promise((resolve,reject)=>c.toBlob(blob=>blob?resolve(blob):reject(new Error('La conversion de l’image a échoué.')),o.f,.92));if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(b);const ex=o.f.split('/')[1].replace('jpeg','jpg');
+const preview=document.createElement('img');preview.src=url;preview.alt='Aperçu de l’image convertie';const link=document.createElement('a');link.href=url;link.download='cosinux.'+ex;const download=document.createElement('button');download.className='s';download.textContent=u.dl;link.append(download);const row=document.createElement('div');row.className='row';row.append(link);r.append(preview,row);return}
+const v=t.noin?'':$('#in').value;const out=String(await t.run(v,o));
+const output=document.createElement('textarea');output.id='out';output.readOnly=true;output.setAttribute('aria-label',u.out);output.value=out;const row=document.createElement('div');row.className='row';const copy=document.createElement('button');copy.id='cp';copy.className='s';copy.textContent=u.copy;const download=document.createElement('button');download.id='dl';download.className='s';download.textContent=u.dl;row.append(copy,download);r.append(output,row);
+copy.onclick=async()=>{try{await navigator.clipboard.writeText(out)}catch(e){output.focus();output.select();if(!document.execCommand('copy'))throw new Error('Copie impossible sur ce navigateur.')}copy.textContent=u.copied;setTimeout(()=>copy.textContent=u.copy,1500)};
+download.onclick=()=>{const a=document.createElement('a'),ub=URL.createObjectURL(new Blob([out],{type:'text/plain;charset=utf-8'}));a.href=ub;a.download='cosinux-'+t.id+'.'+(t.ext||'txt');a.click();setTimeout(()=>URL.revokeObjectURL(ub),1000)}
+}catch(e){r.textContent='⚠ '+String(e.message||e)}}
+$('#q').oninput=draw;$('#lg').onclick=()=>{lang=lang=='fr'?'en':'fr';try{localStorage.setItem('ux',lang)}catch(e){}draw()};
+draw();
+</script></body></html>
