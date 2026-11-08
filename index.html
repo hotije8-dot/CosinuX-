@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COSINUX</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#14213d">
+<style>
+:root{--bg:#eef1f5;--sf:#fff;--ink:#14213d;--mu:#5b6678;--ac:#1f5fd1;--on:#fff;--ln:#cfd6e2;--er:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#101826;--sf:#1a2538;--ink:#e8edf6;--mu:#9aa7bd;--ac:#6ea3ff;--on:#0c1424;--ln:#2e3b54;--er:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:2px solid var(--ink)}
+h1{margin:0;font:800 22px/1 Georgia,"Times New Roman",serif;letter-spacing:.04em}
+header p{margin:2px 0 0;color:var(--mu);font-size:13px}
+button,select{font:inherit;color:inherit}
+.lg{background:none;border:1.5px solid var(--ink);border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600}
+main{max-width:860px;margin:0 auto;padding:16px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+nav button{background:var(--sf);border:1.5px solid var(--ln);border-radius:6px;padding:8px 12px;cursor:pointer}
+nav button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+section{background:var(--sf);border:1.5px solid var(--ln);border-radius:10px;padding:16px}
+h2{margin:0 0 4px;font:700 19px Georgia,serif}
+.hint{color:var(--mu);font-size:14px;margin:0 0 12px}
+label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+textarea{width:100%;min-height:150px;padding:10px;border:1.5px solid var(--ln);border-radius:6px;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,Consolas,monospace;resize:vertical}
+select,input[type=file]{max-width:100%;padding:6px;border:1.5px solid var(--ln);border-radius:6px;background:var(--bg)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.go{background:var(--ac);color:var(--on);border:0;border-radius:6px;padding:10px 20px;font-weight:700;cursor:pointer}
+.sec{background:none;border:1.5px solid var(--ink);border-radius:6px;padding:8px 14px;cursor:pointer}
+.err{color:var(--er);font-weight:600;margin-top:12px}
+a.sec{text-decoration:none;display:inline-block}
+.note{margin-top:16px;color:var(--mu);font-size:13px}
+button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><div><h1>COSINUX</h1><p id="tag"></p></div><button class="lg" id="lg" aria-label="Langue / Language"></button></header>
+<main><nav id="nav"></nav><section id="pn"></section><p class="note" id="nt"></p></main>
+<script>
+let lang=(navigator.language||"fr").startsWith("en")?"en":"fr",cur=0,blobUrl=null;
+const L=(f,e)=>lang==="en"?e:f,$=s=>document.querySelector(s);
+const bad=(f,e)=>{throw new Error(L(f,e))};
+function parseCSV(t){const l=t.split("\n")[0],d=(l.match(/;/g)||[]).length>(l.match(/,/g)||[]).length?";":",";const r=[];let row=[],c="",q=false;
+for(let i=0;i<t.length;i++){const h=t[i];if(q){if(h=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=h}
+else if(h=='"')q=true;else if(h===d){row.push(c);c=""}
+else if(h==="\n"||h==="\r"){if(h==="\r"&&t[i+1]==="\n")i++;row.push(c);r.push(row);row=[];c=""}else c+=h}
+if(q)bad("Guillemet non fermé dans le CSV.","Unclosed quote in CSV.");
+if(c!==""||row.length){row.push(c);r.push(row)}return r.filter(x=>x.some(v=>v!==""))}
+const cell=v=>{const s=v==null?"":typeof v==="object"?JSON.stringify(v):String(v);return /[",;\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+const uniq=a=>[...new Set(a)];
+const need=s=>{if(!s.trim())bad("Saisissez ou chargez du contenu.","Enter or load some content.");return s};
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+function rnd(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n}
+const T=[
+{n:["JSON → CSV","JSON → CSV"],ext:"csv",h:["Collez un tableau JSON d’objets.","Paste a JSON array of objects."],
+ run:s=>{let d;try{d=JSON.parse(need(s))}catch(e){bad("JSON invalide : "+e.message,"Invalid JSON: "+e.message)}
+ if(!Array.isArray(d))d=[d];if(!d.length)bad("Le tableau est vide.","The array is empty.");
+ if(d.some(o=>o===null||typeof o!=="object"||Array.isArray(o)))bad("Attendu : une liste d’objets.","Expected a list of objects.");
+ const k=uniq(d.flatMap(Object.keys));return [k.map(cell).join(","),...d.map(o=>k.map(c=>cell(o[c])).join(","))].join("\n")}},
+{n:["CSV → JSON","CSV → JSON"],ext:"json",h:["Séparateur , ou ; détecté automatiquement. La première ligne sert d’en-tête.","Separator , or ; is detected. First line is the header."],
+ run:s=>{const r=parseCSV(need(s));if(r.length<2)bad("Il faut un en-tête et au moins une ligne.","Need a header and at least one row.");
+ const h=r[0];return JSON.stringify(r.slice(1).map(x=>Object.fromEntries(h.map((k,i)=>[k,x[i]??""]))),null,2)}},
+{n:["Base64 : encoder","Base64: encode"],h:["Le texte est encodé en UTF-8 puis en Base64.","Text is encoded as UTF-8, then Base64."],
+ run:s=>{const b=new TextEncoder().encode(need(s));let x="";b.forEach(c=>x+=String.fromCharCode(c));return btoa(x)}},
+{n:["Base64 : décoder","Base64: decode"],h:["Collez du Base64 valide.","Paste valid Base64."],
+ run:s=>{try{const x=atob(need(s).replace(/\s/g,"")),b=Uint8Array.from(x,c=>c.charCodeAt(0));return new TextDecoder("utf-8",{fatal:true}).decode(b)}
+ catch(e){bad("Base64 invalide ou texte non décodable.","Invalid Base64 or undecodable text.")}}},
+{n:["Image PNG/JPG/WebP","Image PNG/JPG/WebP"],img:true,sel:[["png","PNG"],["jpeg","JPG"],["webp","WebP"]],h:["Choisissez une image et le format de sortie.","Pick an image and the output format."]},
+{n:["Extraire e-mails","Extract emails"],h:["Adresses uniques trouvées dans le texte.","Unique addresses found in the text."],
+ run:s=>{const r=uniq(need(s).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g)||[]);if(!r.length)bad("Aucune adresse e-mail trouvée.","No email found.");return r.join("\n")}},
+{n:["Extraire liens","Extract links"],h:["Liens http(s) uniques trouvés dans le texte.","Unique http(s) links found in the text."],
+ run:s=>{const r=uniq((need(s).match(/https?:\/\/[^\s<>"')\]]+/gi)||[]).map(u=>u.replace(/[.,;:!?]+$/,"")));if(!r.length)bad("Aucun lien trouvé.","No link found.");return r.join("\n")}},
+{n:["Extraire téléphones","Extract phones"],h:["Numéros de 8 à 15 chiffres, avec ou sans indicatif.","Numbers with 8 to 15 digits, with or without country code."],
+ run:s=>{const r=uniq((need(s).match(/(?:\+|00)?\d[\d\s().-]{6,}\d/g)||[]).map(x=>x.trim()).filter(x=>{const n=x.replace(/\D/g,"").length;return n>=8&&n<=15}));
+ if(!r.length)bad("Aucun numéro trouvé.","No phone number found.");return r.join("\n")}},
+{n:["Supprimer doublons","Remove duplicates"],sel:[["exact",["Casse exacte","Exact case"]],["ci",["Ignorer la casse","Ignore case"]]],h:["Une entrée par ligne. La première occurrence est conservée.","One entry per line. First occurrence is kept."],
+ run:(s,m)=>{const seen=new Set(),o=[];need(s).split(/\r?\n/).forEach(l=>{const k=m==="ci"?l.trim().toLowerCase():l.trim();if(k===""||seen.has(k))return;seen.add(k);o.push(l)});return o.join("\n")}},
+{n:["Nettoyer le texte","Clean text"],h:["Retire espaces en trop, caractères invisibles et lignes vides répétées.","Removes extra spaces, invisible characters and repeated blank lines."],
+ run:s=>need(s).replace(/[\u200B-\u200D\uFEFF]/g,"").replace(/\u00A0/g," ").split(/\r?\n/).map(l=>l.replace(/[ \t]+/g," ").trim()).join("\n").replace(/\n{3,}/g,"\n\n").trim()},
+{n:["UUID","UUID"],h:["Saisissez le nombre d’identifiants (1 à 100). Vide = 5.","Enter how many ids (1 to 100). Empty = 5."],
+ run:s=>{const n=s.trim()===""?5:Number(s.trim());if(!Number.isInteger(n)||n<1||n>100)bad("Entrez un entier entre 1 et 100.","Enter an integer from 1 to 100.");return Array.from({length:n},()=>crypto.randomUUID()).join("\n")}},
+{n:["Mot de passe / SHA-256","Password / SHA-256"],sel:[["pwd",["Mot de passe","Password"]],["sha","SHA-256"]],h:["Mot de passe : saisissez la longueur (8 à 64, vide = 16). SHA-256 : saisissez le texte.","Password: enter the length (8 to 64, empty = 16). SHA-256: enter the text."],
+ run:async(s,m)=>{if(m==="sha")return hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(need(s))));
+ const n=s.trim()===""?16:Number(s.trim());if(!Number.isInteger(n)||n<8||n>64)bad("Longueur : entier de 8 à 64.","Length: integer from 8 to 64.");
+ const set="abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*?-_";return Array.from({length:n},()=>set[rnd(set.length)]).join("")}}
+];
+async function conv(f,fmt){if(!f)bad("Choisissez une image.","Pick an image.");
+ let b;try{b=await createImageBitmap(f)}catch(e){bad("Fichier image illisible.","Unreadable image file.")}
+ const c=document.createElement("canvas");c.width=b.width;c.height=b.height;const x=c.getContext("2d");
+ if(fmt==="jpeg"){x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height)}x.drawImage(b,0,0);
+ const bl=await new Promise(r=>c.toBlob(r,"image/"+fmt,.92));if(!bl||bl.type!=="image/"+fmt)bad("Ce navigateur ne gère pas ce format.","This browser does not support this format.");return bl}
+function nav(){$("#nav").innerHTML=T.map((t,i)=>`<button aria-pressed="${i===cur}" data-i="${i}">${t.n[lang==="en"?1:0]}</button>`).join("");
+ $("#nav").onclick=e=>{const i=e.target.dataset.i;if(i!==undefined){cur=+i;panel()}}}
+function panel(){nav();const t=T[cur],nm=t.n[lang==="en"?1:0],o=t.sel?`<label for="m">${L("Option","Option")}</label><select id="m">${t.sel.map(([v,l])=>`<option value="${v}">${Array.isArray(l)?l[lang==="en"?1:0]:l}</option>`).join("")}</select>`:"";
+ const inp=t.img?`<label for="f">${L("Image","Image")}</label><input type="file" id="f" accept="image/*">`:
+ `<label for="in">${L("Entrée","Input")}</label><textarea id="in" spellcheck="false"></textarea><div class="row"><label class="sec" style="margin:0;font-weight:400;cursor:pointer">${L("Ouvrir un fichier","Open a file")}<input type="file" id="of" accept=".txt,.csv,.json,.md,.log,text/*" hidden></label></div>`;
+ $("#pn").innerHTML=`<h2>${nm}</h2><p class="hint">${t.h[lang==="en"?1:0]}</p>${o}${inp}<div class="row"><button class="go" id="go">${L("Exécuter","Run")}</button></div><div id="out"></div>`;
+ const of=$("#of");if(of)of.onchange=async()=>{const f=of.files[0];if(!f)return;if(f.size>5e6){$("#out").innerHTML=`<p class="err">${L("Fichier trop volumineux (5 Mo max).","File too large (5 MB max).")}</p>`;return}$("#in").value=await f.text();$("#out").innerHTML=""};
+ $("#go").onclick=run}
+async function run(){const t=T[cur],out=$("#out"),m=$("#m")?.value;out.innerHTML="";if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null}
+ try{if(t.img){const bl=await conv($("#f").files[0],m);blobUrl=URL.createObjectURL(bl);const e=m==="jpeg"?"jpg":m;
+  out.innerHTML=`<label>${L("Résultat","Result")}</label><p>${(bl.size/1024).toFixed(1)} Ko</p><div class="row"><a class="sec" href="${blobUrl}" download="cosinux.${e}">${L("Télécharger","Download")}</a></div>`;return}
+  const r=await t.run($("#in").value,m);out.innerHTML=`<label for="rs">${L("Résultat","Result")}</label><textarea id="rs" readonly></textarea><div class="row"><button class="sec" id="cp">${L("Copier","Copy")}</button><button class="sec" id="dl">${L("Télécharger","Download")}</button></div>`;
+  $("#rs").value=r;$("#cp").onclick=async()=>{try{await navigator.clipboard.writeText(r);$("#cp").textContent=L("Copié","Copied")}catch(e){$("#rs").select()}};
+  $("#dl").onclick=()=>{const u=URL.createObjectURL(new Blob([r],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download="cosinux."+(t.ext||"txt");a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}}
+ catch(e){const p=document.createElement("p");p.className="err";p.setAttribute("role","alert");p.textContent=e.message;out.appendChild(p)}}
+function ui(){document.documentElement.lang=lang;$("#lg").textContent=lang==="en"?"FR":"EN";
+ $("#tag").textContent=L("12 outils, sans serveur. Vos données restent sur votre appareil.","12 tools, no server. Your data stays on your device.");
+ $("#nt").textContent=L("L’assistant IA arrivera dans une prochaine version : il demande un serveur pour protéger la clé du fournisseur.","The AI assistant comes in a later version: it needs a server to protect the provider key.");
+ const v=$("#in")?.value;panel();if(v&&$("#in"))$("#in").value=v}
+$("#lg").onclick=()=>{lang=lang==="en"?"fr":"en";ui()};
+ui();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
